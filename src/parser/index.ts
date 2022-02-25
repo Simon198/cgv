@@ -35,10 +35,12 @@ export type ParsedOperation = {
     parameters: Array<ParsedStep>
     identifier: string
 }
+
 export type ParsedSymbol = {
     type: "symbol"
     identifier: string
 }
+
 export type ParsedRaw = {
     type: "raw"
     value: any
@@ -51,5 +53,8 @@ export type ParsedReturn = {
 }
 
 export type ParsedGrammarDefinition = {
-    [Symbol in string]: ParsedStep
+    [symbol: string]: {
+        symbol: ParsedSymbol,
+        step: ParsedStep
+    }
 }

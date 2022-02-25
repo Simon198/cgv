@@ -13,6 +13,8 @@ declare let thisSymbol: any
 declare let returnSymbol: any
 declare let openBracket: any
 declare let closedBracket: any
+// declare let openSquaredBracket: any
+// declare let closedSquaredBracket: any
 declare let comma: any
 declare let js: any
 declare let boolean: any
@@ -54,6 +56,8 @@ const lexer = moo.compile({
     arrow: /->/,
     openBracket: /\(/,
     closedBracket: /\)/,
+    // openSquaredBracket: /\[/,
+    // closedSquaredBracket: /\]/,
     point: /\./,
     comma: /,/,
     colon: /:/,
@@ -76,7 +80,7 @@ const lexer = moo.compile({
     multiply: /\*/,
     modulo: /%/,
     divide: /\//,
-    identifier: /[a-zA-Z_$]+\w*/,
+    identifier: /[A-Za-z]+(?:_[0-9]+)?(?:\[(?:\s*(?:[+-])?\d+(?:\.\d*)?\s*,)*\s*(?:[+-])?\d+(?:\.\d*)?\s*\])?/,
     ws: { match: /\s+/, lineBreaks: true },
 })
 
@@ -113,24 +117,33 @@ const grammar: Grammar = {
         {
             name: "GrammarDefinition",
             symbols: ["ws", "RuleDefinition", "ws"],
-            postprocess: ([, [identifier, steps]]) => ({ [identifier]: steps }),
+            postprocess: ([, [symbol, step], ]) => ({ [symbol.identifier]: {
+                    symbol: symbol,
+                    step: step
+                }
+            })
         },
         {
             name: "GrammarDefinition",
             symbols: ["ws", "RuleDefinition", lexer.has("ws") ? { type: "ws" } : ws, "GrammarDefinition"],
-            postprocess: ([, [identifier, steps], , prev]) => ({ [identifier]: steps, ...prev }),
+            postprocess: ([, [symbol, step], , prev]) => ({ [symbol.identifier]: {
+                    symbol: symbol,
+                    step: step
+                },
+                ...prev
+            })
         },
         { name: "GrammarDefinition", symbols: ["ws"], postprocess: () => ({}) },
         {
             name: "RuleDefinition",
             symbols: [
-                lexer.has("identifier") ? { type: "identifier" } : identifier,
+                "Symbol",
                 "ws",
                 lexer.has("arrow") ? { type: "arrow" } : arrow,
                 "ws",
                 "Steps",
             ],
-            postprocess: ([{ value }, , , , steps]) => [value, steps],
+            postprocess: ([value, , , , steps]) => [value, steps],
         },
         { name: "Steps", symbols: ["ParallelSteps"], postprocess: ([steps]) => steps },
         { name: "EmptySteps", symbols: ["ParallelSteps"], postprocess: ([steps]) => steps },
@@ -229,6 +242,7 @@ const grammar: Grammar = {
             name: "Symbol",
             symbols: [lexer.has("identifier") ? { type: "identifier" } : identifier],
             postprocess: ([{ value }]) => ({ type: "symbol", identifier: value }),
+            // TODO: parse parameters from identifier
         },
         {
             name: "JS",

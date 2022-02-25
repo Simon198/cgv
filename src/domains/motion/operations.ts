@@ -15,15 +15,11 @@ export const operations: Operations = {
             operationInterpretion(
                 (inputs) => {
                     const agent = inputs[0]
-                    const moveInput = new MoveInput(
-                        inputs[1],
-                        inputs[2],
-                        inputs[3],
-                        inputs[4],
-                        inputs[5],
-                        inputs[6],
-                        inputs[7]
-                    )
+                    const moveInput = new MoveInput({
+                        timestamp: inputs[1],
+                        direction: inputs[2],
+                        speed: inputs[3]
+                    })
                     return of( move(agent, moveInput) )
                 },
                 (values) => values,

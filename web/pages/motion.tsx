@@ -3,49 +3,46 @@ import React, { useEffect, useState } from "react"
 import { parse, interprete, matrixToArray } from "cgv"
 import { operations } from "cgv/domains/motion"
 import { Agent } from "cgv/domains/motion/agent"
-import { interval, map, NEVER, startWith } from "rxjs"
+import { interval, map, NEVER, of, startWith } from "rxjs"
 import { useMapbox } from "../src/use-mapbox"
 import { useInterpretion } from "../src/use-interpretion"
+import { AgentVisualizer } from "../src/agent-visualizer"
 
 export default function Index() {
-    // const [text, setText] = useState("")
-    // const input = useMapbox()
-    // const [result, error] = useInterpretion(text, input, operations)
-    // console.log('R', result)
-    // console.log('E', error)
-
-    const initial_agent = new Agent(0)
+    // const initial_agent = new Agent(0)
 
     const [text, setText] = useState("")
-    const [[result, error], setState] = useState<[string | undefined, string | undefined]>([undefined, undefined])
+    const [[agents, error], setState] = useState<[Agent[] | null, string | undefined]>([null, undefined])
     useEffect(() => {
         try {
             const grammar = parse(text)
-            setState([undefined, undefined])
-            const subscription = NEVER.pipe(
-                // map((val) => val + 1),
-                startWith(initial_agent),
-                map((value) => ({
-                    value,
-                    eventDepthMap: {},
-                    parameters: {},
-                    terminated: false,
-                })),
+            setState([[], undefined])
+            const subscription = of(() => {}).pipe(
+                map((value) => {
+                    return {
+                        value,
+                        eventDepthMap: {},
+                        parameters: {},
+                        terminated: false,
+                    }
+                }),
                 interprete(grammar, operations),
-                matrixToArray()
             ).subscribe({
                 next: (results) => {
-                    for (const r of results)
-                        console.log('R', r.value)
-                    return setState([JSON.stringify(results.map(({ value }) => value)), undefined])
+                    return setState([results.map(result => result.value), undefined])
                 },
-                error: (error) => setState([undefined, error.message]),
+                error: (error) => {
+                    setState([null, error.message])
+                },
             })
             return () => subscription.unsubscribe()
         } catch (error: any) {
-            setState([undefined, error.message])
+            console.error(error)
+            setState([null, error.message])
         }
     }, [text])
+
+    // TODO: add option to change datasets
 
     return (
         <>
@@ -55,9 +52,9 @@ export default function Index() {
                 <meta name="viewport" content="initial-scale=1.0, width=device-width" />
             </Head>
             <div className="d-flex responsive-flex-direction" style={{ width: "100vw", height: "100vh" }}>
-                {/* TODO: add visualizer */}
                 <div style={{ whiteSpace: "pre-line" }} className="p-3 flex-basis-0 flex-grow-1 bg-white h3 mb-0">
-                    {result}
+                    {/* {agents} */}
+                    <AgentVisualizer agents={agents} />
                 </div>
                 <div className="d-flex flex-column flex-basis-0 flex-grow-1">
                     <textarea
@@ -71,7 +68,7 @@ export default function Index() {
                         className="overflow-auto p-3 flex-basis-0 h3 mb-0 bg-black flex-grow-1"
                         style={{ whiteSpace: "pre-line", maxHeight: 300 }}>
                         {error == null ? (
-                            result == null ? (
+                            agents == null ? (
                                 <span className="text-primary">loading ...</span>
                             ) : (
                                 <span className="text-success">ok</span>
