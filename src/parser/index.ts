@@ -38,7 +38,8 @@ export type ParsedOperation = {
 
 export type ParsedSymbol = {
     type: "symbol"
-    identifier: string
+    identifier: string,
+    parameters: Array<ParsedStep>
 }
 
 export type ParsedRaw = {
@@ -53,8 +54,6 @@ export type ParsedReturn = {
 }
 
 export type ParsedGrammarDefinition = {
-    [symbol: string]: {
-        symbol: ParsedSymbol,
-        step: ParsedStep
-    }
-}
+    symbol: ParsedSymbol,
+    step: ParsedStep
+}[]

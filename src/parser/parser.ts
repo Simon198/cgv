@@ -13,8 +13,8 @@ declare let thisSymbol: any
 declare let returnSymbol: any
 declare let openBracket: any
 declare let closedBracket: any
-// declare let openSquaredBracket: any
-// declare let closedSquaredBracket: any
+declare let openSquaredBracket: any
+declare let closedSquaredBracket: any
 declare let comma: any
 declare let js: any
 declare let boolean: any
@@ -44,6 +44,7 @@ declare let multiply: any
 declare let modulo: any
 
 import moo from "moo"
+import { ParsedRaw, ParsedSymbol } from "."
 
 const lexer = moo.compile({
     returnSymbol: /return/,
@@ -56,8 +57,8 @@ const lexer = moo.compile({
     arrow: /->/,
     openBracket: /\(/,
     closedBracket: /\)/,
-    // openSquaredBracket: /\[/,
-    // closedSquaredBracket: /\]/,
+    openSquaredBracket: /\[/,
+    closedSquaredBracket: /\]/,
     point: /\./,
     comma: /,/,
     colon: /:/,
@@ -81,6 +82,7 @@ const lexer = moo.compile({
     modulo: /%/,
     divide: /\//,
     identifier: /[A-Za-z]+(?:_[0-9]+)?(?:\[(?:\s*(?:[+-])?\d+(?:\.\d*)?\s*,)*\s*(?:[+-])?\d+(?:\.\d*)?\s*\])?/,
+    // identifier: /[A-Za-z]+(?:_[0-9]+)?/,
     ws: { match: /\s+/, lineBreaks: true },
 })
 
@@ -111,29 +113,60 @@ interface Grammar {
     ParserStart: string
 }
 
+export function is_agent_symbol(symbol_identifier: string) {
+    return symbol_identifier.includes('[')
+}
+
+export function get_agent_id(symbol_identifier: string): ParsedRaw[] {
+    let [symbol_name, parameters] = symbol_identifier.split('[')
+    const [agent_type, agent_id] = symbol_name.split('_')
+
+    // remove remaining ']'
+    parameters = parameters.slice(0, -1)
+
+    const raw_parameters: ParsedRaw[] = [
+        {
+            type: 'raw',
+            value: agent_id
+        }
+    ]
+    for (const par of parameters.split(',')) {
+        raw_parameters.push({
+            type: 'raw',
+            value: parseFloat(par)
+        })
+    }
+    raw_parameters.push({
+        type: 'raw',
+        value: agent_type
+    })
+    
+    return raw_parameters
+}
+
 const grammar: Grammar = {
     Lexer: lexer,
     ParserRules: [
         {
             name: "GrammarDefinition",
             symbols: ["ws", "RuleDefinition", "ws"],
-            postprocess: ([, [symbol, step], ]) => ({ [symbol.identifier]: {
+            postprocess: ([, [symbol, step], ]) => ([{
                     symbol: symbol,
                     step: step
                 }
-            })
+            ])
         },
         {
             name: "GrammarDefinition",
             symbols: ["ws", "RuleDefinition", lexer.has("ws") ? { type: "ws" } : ws, "GrammarDefinition"],
-            postprocess: ([, [symbol, step], , prev]) => ({ [symbol.identifier]: {
+            postprocess: ([, [symbol, step], , prev]) => ([{
                     symbol: symbol,
                     step: step
                 },
                 ...prev
-            })
+            ])
         },
-        { name: "GrammarDefinition", symbols: ["ws"], postprocess: () => ({}) },
+        { name: "GrammarDefinition", symbols: ["ws"], postprocess: () => ([]) },
         {
             name: "RuleDefinition",
             symbols: [
@@ -238,11 +271,32 @@ const grammar: Grammar = {
             symbols: ["ws", lexer.has("comma") ? { type: "comma" } : comma, "Steps"],
             postprocess: ([, , steps]) => steps,
         },
+        // {
+        //     name: "Symbol",
+        //     symbols: [
+        //         lexer.has("identifier") ? { type: "identifier" } : identifier,
+        //         lexer.has("openSquaredBracket") ? { type: "openSquaredBracket" } : openSquaredBracket,
+        //         "EmptyParameters",
+        //         "ws",
+        //         lexer.has("closedSquaredBracket") ? { type: "closedSquaredBracket" } : closedSquaredBracket,
+        //     ],
+        //     postprocess: ([{ value }, , parameters]) => {
+        //         const [agent_type, agent_id] = value.split('_')
+        //         parameters.unshift({ type: 'raw', value: agent_id})
+        //         parameters.push({ type: 'raw', value: agent_type})
+        //         return { type: "symbol", identifier: value, parameters }
+        //     },
+        // },
         {
             name: "Symbol",
             symbols: [lexer.has("identifier") ? { type: "identifier" } : identifier],
-            postprocess: ([{ value }]) => ({ type: "symbol", identifier: value }),
-            // TODO: parse parameters from identifier
+            postprocess: ([{ value }]) => {
+                let parameters: ParsedRaw[] = [];
+                if (is_agent_symbol(value)) {
+                    parameters = get_agent_id(value)
+                }
+                return { type: "symbol", identifier: value, parameters }
+            },
         },
         {
             name: "JS",

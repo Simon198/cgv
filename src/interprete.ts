@@ -2,14 +2,18 @@ import { defer, delay, map, merge, MonoTypeOperatorFunction, Observable, of, Ope
 import {
     asChangeSet,
     changesToMatrix,
+    // LeftHandSymbol,
     mapMatrix,
     Matrix,
     mergeMatrixOperators,
+    operationInterpretion,
     ParsedGrammarDefinition,
     ParsedStep,
     ParsedSymbol,
+    thisParameter,
 } from "."
-import { Agent } from "./domains/motion/agent"
+import { Agent, AgentParameters } from "./domains/motion/agent"
+import { is_agent_symbol } from "./parser/parser"
 
 export type EventDepthMap = Readonly<{ [identifier in string]?: number }>
 
@@ -52,18 +56,25 @@ export type InterpretionValue<T> = Readonly<{
     parameters: Parameters
 }>
 
-export function is_agent_symbol(symbol: ParsedSymbol) {
-    return symbol.identifier.includes('[')
-}
-
-export function get_agent_id(symbol: ParsedSymbol) {
-    let [symbol_name, parameters] = symbol.identifier.split('[')
-    const [agent_type, agent_id] = symbol_name.split('_')
-
-    // remove remaining ']'
-    parameters = parameters.slice(0, -1)
-    
-    return [agent_id, agent_type, parameters.split(',').map(parameter => parseFloat(parameter))]
+function merge_observables(observables: Observable<any>[]): Observable<any> {
+    const single_observable = Array(observables.length).fill(null)
+    for (let i = 0; i < observables.length; i++) {
+        const subscription = observables[i].pipe().subscribe({
+            next: (result) => {
+                if (single_observable[i] == null) {
+                    while (Array.isArray(result)) {
+                        result = result[0]
+                    }
+                    single_observable[i] = result
+                }
+            },
+            error: (error) => {
+                throw error;
+            },
+        })
+        subscription.unsubscribe()
+    }
+    return of(single_observable)
 }
 
 export function interprete<T>(
@@ -71,77 +82,62 @@ export function interprete<T>(
     operations: Operations
 ): OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> {
 
-    const rules = Object.values(grammar)
-    if (rules.length === 0) {
+    if (grammar.length === 0) {
         return (input) => input
     }
-    const ruleOperatorMap = new Map<
-        string,
+    const ruleOperatorMap = new Map<string,
         { ref: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> | undefined }
     >()
 
-    // iterate over leftsymbols of grammar to initialize agents
-    const agents: {[id: string]: {agent: Agent, step: ParsedStep}} = {}
-    for (const rule of rules) {
+    let index = 0;
+    const result: Observable<any>[] = []
+    const iterate = (input: Observable<Matrix<Readonly<{
+        value: T;
+        eventDepthMap: Readonly<{
+            [x: string]: number | undefined;
+        }>;
+        terminated: boolean;
+        parameters: Readonly<{
+            [x: string]: Observable<any> | undefined;
+        }>;
+    }>>>): Observable<Matrix<Readonly<{
+        value: T;
+        eventDepthMap: Readonly<{
+            [x: string]: number | undefined;
+        }>;
+        terminated: boolean;
+        parameters: Readonly<{
+            [x: string]: Observable<any> | undefined;
+        }>}>>> => {
+
+        if (index == grammar.length) {
+            return merge_observables(result)
+        }
+
+        const rule = grammar[index++]
         const symbol = rule.symbol
+        const step = rule.step
 
-        if (is_agent_symbol(symbol)) {
-            const [agent_id, agent_type, parameters] = get_agent_id(symbol)
+        if (ruleOperatorMap.has(symbol.identifier)) {
+            return iterate(input)
+        }
 
-            if (!Object.keys(agents).includes(agent_id as string)) {
-                agents[agent_id as string] = {
-                    agent: new Agent([agent_id, ...parameters, agent_type]),
-                    step: rule.step
-                }
-            }
-        }
+        const interpretedStep = interpreteStep(symbol, grammar, operations, ruleOperatorMap)(input)
+        result.push(interpretedStep)
+        return iterate(
+            interpretedStep.pipe()
+        )
     }
-
-    // iterate over steps all initialization rules of each 
-    const completed_agents: string[] = []
-    const result: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>>[] = []
-    for (const [agent_id, agent] of Object.entries(agents)) {
-        if (completed_agents.includes(agent_id)) {
-            continue
-        }
-        completed_agents.push(agent_id)
-        const tmp = interpreteStep<T>(agent.agent, agent.step, grammar, operations, ruleOperatorMap, completed_agents)
-        if (tmp) {
-            result.push(tmp)
-        }
-    }
-    return (input) => {
-        const t = Array(result.length).fill(null)
-        for (let i = 0; i < result.length; i++) {
-            const subscription = result[i](input).pipe().subscribe({
-                next: (a) => {
-                    if (t[i] == null) {
-                        while (Array.isArray(a)) {
-                            a = a[0]
-                        }
-                        t[i] = a
-                    }
-                },
-                error: (error) => {
-                    throw error;
-                },
-            })
-            subscription.unsubscribe()
-        }
-        return of(t)
-    }
+    return iterate
 }
 
 export function interpreteStep<T>(
-    agent: Agent,
     step: ParsedStep,
     grammar: ParsedGrammarDefinition,
     operations: Operations,
-    ruleOperatorMap: Map<
-        string,
+    ruleOperatorMap: Map<string,
         { ref: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> | undefined }
-    >,
-    completed_agents: string[]
+    >
 ): OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> {
     switch (step.type) {
         case "operation":
@@ -150,11 +146,11 @@ export function interpreteStep<T>(
                 throw new Error(`unknown operation "${step.identifier}"`)
             }
             return operation(
-                step.parameters.map((parameter) => interpreteStep(agent, parameter, grammar, operations, ruleOperatorMap, completed_agents))
+                step.parameters.map((parameter) => interpreteStep(parameter, grammar, operations, ruleOperatorMap))
             )
         case "parallel":
             return mergeMatrixOperators(
-                step.steps.map((stepOfSteps) => interpreteStep(agent, stepOfSteps, grammar, operations, ruleOperatorMap, completed_agents))
+                step.steps.map((stepOfSteps) => interpreteStep(stepOfSteps, grammar, operations, ruleOperatorMap))
             )
         case "raw": {
             return (matrix) =>
@@ -176,7 +172,6 @@ export function interpreteStep<T>(
                 const terminated: Array<Observable<Matrix<InterpretionValue<T>>>> = []
                 for (const stepOfSteps of step.steps) {
                     const sharedCurrent = current.pipe(
-                        //delay(10),
                         shareReplay({
                             refCount: true,
                             bufferSize: 1,
@@ -185,7 +180,7 @@ export function interpreteStep<T>(
                     terminated.push(sharedCurrent.pipe(filterTerminated(true)))
                     current = sharedCurrent.pipe(
                         filterTerminated(false),
-                        interpreteStep(agent, stepOfSteps, grammar, operations, ruleOperatorMap, completed_agents)
+                        interpreteStep(stepOfSteps, grammar, operations, ruleOperatorMap)
                     )
                 }
 
@@ -194,33 +189,60 @@ export function interpreteStep<T>(
                 )
             }
         case "this":
-            return () => of({
-                value: agent,
-                eventDepthMap: {},
-                terminated: false,
-                parameters: []
-            })
+            return (input) => input
         case "symbol":
             let entry = ruleOperatorMap.get(step.identifier)
-            if (entry == null) {
-                const rule = grammar[step.identifier]
-                
-                if (is_agent_symbol(step)) {
-                    const [agent_id, agent_type, parameters] = get_agent_id(step)
-                    if ( !completed_agents.includes(agent_id as string) ) {
-                        completed_agents.push(agent_id as string)
-                        if (agent_id != agent.id) {
-                            agent = new Agent([agent_id, ...parameters, agent_type])
-                        }
-                    }
+            if (!entry) {
+                const rule = grammar.find(rule => rule.symbol.identifier == step.identifier)
+                if (!rule) {
+                    throw new Error(`Rule ${step.identifier} not found`)
                 }
 
-                if (rule == null) {
-                    throw new Error(`unknown rule "${step.identifier}"`)
-                }
                 entry = { ref: undefined }
                 ruleOperatorMap.set(step.identifier, entry)
-                entry.ref = interpreteStep(agent, rule.step, grammar, operations, ruleOperatorMap, completed_agents)
+
+                if (is_agent_symbol(step.identifier)) {
+                    const get_agent: Operation<any> = (parameters) => (matrix) => {
+                        return matrix.pipe(
+                            operationInterpretion(
+                                (inputs) => {
+                                    const previous_agent: Agent = inputs[0]
+                                    const agent_id = inputs[1]
+
+                                    const agent_parameters = new AgentParameters([
+                                        inputs[2], inputs[3], inputs[4]
+                                    ])
+                                    const agent_type = inputs[5]
+
+                                    if (!agent_id) {
+                                        throw new Error(`The id of the agent ${step.identifier} cannot be empty`)
+                                    }
+
+                                    if (!previous_agent || previous_agent.id != agent_id) {
+                                        // TODO: probably add motions of previous agent to the new one
+                                        const agent = new Agent(agent_id, agent_parameters, agent_type)
+                                        return of(agent)
+                                    } else {
+                                        previous_agent.update_agent_parameters(agent_parameters)
+                                        return of(previous_agent)
+                                    }
+                                },
+                                (values) => values,
+                                [thisParameter, ...parameters]
+                            )
+                        )
+                    }
+                    const agent_operator = get_agent(
+                        step.parameters.map((parameter) => interpreteStep(parameter, grammar, operations, ruleOperatorMap))
+                    )
+                    const interpretedStep = interpreteStep(rule.step, grammar, operations, ruleOperatorMap)
+                    entry.ref = interpretedStep
+                    return (input) => agent_operator(input).pipe(
+                        interpretedStep
+                    )
+                } else  {
+                    entry.ref = interpreteStep(rule.step, grammar, operations, ruleOperatorMap)
+                }
             }
             return (value) => defer(() => value.pipe(entry!.ref!))
     }

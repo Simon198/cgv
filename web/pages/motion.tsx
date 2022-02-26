@@ -29,7 +29,13 @@ export default function Index() {
                 interprete(grammar, operations),
             ).subscribe({
                 next: (results) => {
-                    return setState([results.map(result => result.value), undefined])
+                    if (results) {
+                        console.log('Results', results.map(result => result.value))
+                        setState([results.map(result => result.value), undefined])
+                    } else {
+                        console.log('NO RESULTS')
+                        setState([null, undefined])
+                    }
                 },
                 error: (error) => {
                     setState([null, error.message])
@@ -37,7 +43,6 @@ export default function Index() {
             })
             return () => subscription.unsubscribe()
         } catch (error: any) {
-            console.error(error)
             setState([null, error.message])
         }
     }, [text])
@@ -53,7 +58,6 @@ export default function Index() {
             </Head>
             <div className="d-flex responsive-flex-direction" style={{ width: "100vw", height: "100vh" }}>
                 <div style={{ whiteSpace: "pre-line" }} className="p-3 flex-basis-0 flex-grow-1 bg-white h3 mb-0">
-                    {/* {agents} */}
                     <AgentVisualizer agents={agents} />
                 </div>
                 <div className="d-flex flex-column flex-basis-0 flex-grow-1">

@@ -14,16 +14,18 @@ export const operations: Operations = {
         return matrix.pipe(
             operationInterpretion(
                 (inputs) => {
+                    if (inputs.length != 3) {
+                        throw new Error('"move" has to receive exactly two parameters')
+                    }
                     const agent = inputs[0]
                     const moveInput = new MoveInput({
-                        timestamp: inputs[1],
-                        direction: inputs[2],
-                        speed: inputs[3]
+                        direction: inputs[1],
+                        speed: inputs[2]
                     })
                     return of( move(agent, moveInput) )
                 },
                 (values) => values,
-                parameters
+                [thisParameter, ...parameters]
             )
         )
     }
