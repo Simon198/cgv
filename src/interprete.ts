@@ -56,27 +56,6 @@ export type InterpretionValue<T> = Readonly<{
     parameters: Parameters
 }>
 
-function merge_observables(observables: Observable<any>[]): Observable<any> {
-    const single_observable = Array(observables.length).fill(null)
-    for (let i = 0; i < observables.length; i++) {
-        const subscription = observables[i].pipe().subscribe({
-            next: (result) => {
-                if (single_observable[i] == null) {
-                    while (Array.isArray(result)) {
-                        result = result[0]
-                    }
-                    single_observable[i] = result
-                }
-            },
-            error: (error) => {
-                throw error;
-            },
-        })
-        subscription.unsubscribe()
-    }
-    return of(single_observable)
-}
-
 function iterate<T>(input: Observable<Matrix<Readonly<{
     value: T;
     eventDepthMap: Readonly<{
