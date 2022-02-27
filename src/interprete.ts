@@ -1,4 +1,4 @@
-import { defer, delay, map, merge, MonoTypeOperatorFunction, Observable, of, OperatorFunction, shareReplay } from "rxjs"
+import { defer, delay, map, merge, MonoTypeOperatorFunction, Observable, of, OperatorFunction, shareReplay, throwError } from "rxjs"
 import {
     asChangeSet,
     changesToMatrix,
@@ -77,58 +77,56 @@ function merge_observables(observables: Observable<any>[]): Observable<any> {
     return of(single_observable)
 }
 
+function iterate<T>(input: Observable<Matrix<Readonly<{
+    value: T;
+    eventDepthMap: Readonly<{
+        [x: string]: number | undefined;
+    }>;
+    terminated: boolean;
+    parameters: Readonly<{
+        [x: string]: Observable<any> | undefined;
+    }>;
+    }>>>, grammar: ParsedGrammarDefinition, operations: Operations,
+    index=0, result: Observable<any>[]=[], ruleOperatorMap = new Map<string,
+    { ref: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> | undefined }>()
+): Observable<Matrix<Readonly<{
+    value: T;
+    eventDepthMap: Readonly<{
+        [x: string]: number | undefined;
+    }>;
+    terminated: boolean;
+    parameters: Readonly<{
+        [x: string]: Observable<any> | undefined;
+    }>}>>> {
+
+    if (index == grammar.length) {
+        return merge_observables(result)
+    }
+
+    const rule = grammar[index++]
+    const symbol = rule.symbol
+
+    if (ruleOperatorMap.has(symbol.identifier)) {
+        return iterate(input, grammar, operations, index+1, result, ruleOperatorMap)
+    }
+
+    const interpretedStep = interpreteStep(symbol, grammar, operations, ruleOperatorMap)(input)
+    result.push(interpretedStep)
+    return iterate(
+        interpretedStep.pipe(),
+        grammar, operations,
+        index+1, result, ruleOperatorMap
+    )
+}
+
 export function interprete<T>(
     grammar: ParsedGrammarDefinition,
     operations: Operations
 ): OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> {
-
     if (grammar.length === 0) {
         return (input) => input
     }
-    const ruleOperatorMap = new Map<string,
-        { ref: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> | undefined }
-    >()
-
-    let index = 0;
-    const result: Observable<any>[] = []
-    const iterate = (input: Observable<Matrix<Readonly<{
-        value: T;
-        eventDepthMap: Readonly<{
-            [x: string]: number | undefined;
-        }>;
-        terminated: boolean;
-        parameters: Readonly<{
-            [x: string]: Observable<any> | undefined;
-        }>;
-    }>>>): Observable<Matrix<Readonly<{
-        value: T;
-        eventDepthMap: Readonly<{
-            [x: string]: number | undefined;
-        }>;
-        terminated: boolean;
-        parameters: Readonly<{
-            [x: string]: Observable<any> | undefined;
-        }>}>>> => {
-
-        if (index == grammar.length) {
-            return merge_observables(result)
-        }
-
-        const rule = grammar[index++]
-        const symbol = rule.symbol
-        const step = rule.step
-
-        if (ruleOperatorMap.has(symbol.identifier)) {
-            return iterate(input)
-        }
-
-        const interpretedStep = interpreteStep(symbol, grammar, operations, ruleOperatorMap)(input)
-        result.push(interpretedStep)
-        return iterate(
-            interpretedStep.pipe()
-        )
-    }
-    return iterate
+    return (input) => iterate(input, grammar, operations)
 }
 
 export function interpreteStep<T>(

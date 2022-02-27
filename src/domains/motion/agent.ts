@@ -37,7 +37,7 @@ export class AgentParameters {
 enum AgentType {
     PEDESTRIAN = 'pedestrian',
     CAR = 'car',
-    CYCLIST = 'bicycle'
+    CYCLIST = 'biker'
 }
 
 export class Agent {
@@ -103,7 +103,7 @@ export class Agent {
         const real_x = this.last_agent_parameters.x + distance * x_direction
         const real_y = this.last_agent_parameters.y + distance * y_direction
 
-        if ( real_x != parameters.x || real_y != parameters.y ) {
+        if ( Math.sqrt((real_x - parameters.x)**2 + (real_y - parameters.y)**2) > 0.1 ) {
             throw new Error(
                 `The positions of agent ${this.id} at timestamp ${parameters.timestamp} should be ${[real_x, real_y]},` + 
                 `instead of ${[parameters.x, parameters.y]}`
@@ -111,13 +111,14 @@ export class Agent {
         }
 
         // add missing positions
-        for (let time = 1; time <= parameters.timestamp - this.last_agent_parameters.timestamp; time++) {
+        for (let time = 1; time < parameters.timestamp - this.last_agent_parameters.timestamp; time++) {
             const distance = time * speed
             this.add_position(
                 this.last_agent_parameters.x + distance * x_direction,
                 this.last_agent_parameters.y + distance * y_direction
             )
         }
+        this.add_position(parameters.x, parameters.y)
 
         // update last agent parameters
         this.last_agent_parameters = parameters

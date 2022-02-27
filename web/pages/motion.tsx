@@ -29,12 +29,12 @@ export default function Index() {
                 interprete(grammar, operations),
             ).subscribe({
                 next: (results) => {
-                    if (results) {
+                    if (Array.isArray(results)) {
                         console.log('Results', results.map(result => result.value))
                         setState([results.map(result => result.value), undefined])
                     } else {
                         console.log('NO RESULTS')
-                        setState([null, undefined])
+                        setState([[], undefined])
                     }
                 },
                 error: (error) => {
