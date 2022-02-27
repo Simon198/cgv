@@ -38,7 +38,7 @@ export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
                 if (frame_number == 0) {
                     scene = new Scene()
                 }
-                console.log('Frame', frame_number + 1, maximum_timestamp)
+                console.log('Frame', frame_number + 1, maximum_timestamp - 1)
                 for (const agent_positions of positions) {
     
                     let points: Vector3[] = []
@@ -54,7 +54,7 @@ export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
                     scene.add( line );
                 }
                 frame_number += 1
-                if (frame_number < maximum_timestamp) {
+                if (frame_number < maximum_timestamp - 1) {
                     next_frame(maximum_timestamp)
                 }
             }, 2000)
@@ -64,9 +64,13 @@ export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
             const real_agents = agents.filter(agent => agent instanceof Agent)
             // get maximal timestamp of all agents
             // idea: start_timestamp = 0 to maximal timestamp
-            const maximum_timestamp = Math.max(...real_agents.map((agent) => agent.last_agent_parameters.timestamp)) + 1
-            real_agents.map(agent => agent.complete_positions(maximum_timestamp))
-            var positions = real_agents.map(agent => agent.get_positions())
+            const maximum_timestamp = 2 + Math.max(...real_agents.map((agent) => agent.get_last_timestamp()))
+            var positions: Array<any> = []
+            try {
+                positions = real_agents.map(agent => agent.complete_positions(maximum_timestamp))
+            } catch (error) {
+                console.error(error)
+            }
             
             if (maximum_timestamp > -1) {
                 render()

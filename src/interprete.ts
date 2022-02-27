@@ -183,9 +183,9 @@ export function interpreteStep<T>(
                         return matrix.pipe(
                             operationInterpretion(
                                 (inputs: (Agent | string | number)[]): any => {
-                                    let prev_agent: any = inputs[0] as Agent
-                                    if (!(prev_agent instanceof Agent)) {
-                                        prev_agent = null
+                                    let input_agent: any = inputs[0] as Agent
+                                    if (!(input_agent instanceof Agent)) {
+                                        input_agent = null
                                     }
 
                                     const agent_id = inputs[1]
@@ -199,16 +199,32 @@ export function interpreteStep<T>(
                                         throw new Error(`The id of the agent ${step.identifier} cannot be empty`)
                                     }
 
-                                    if (
-                                        !prev_agent ||
-                                        prev_agent.id != agent_id
-                                    ) {
-                                        const agent = new Agent(agent_id as string, agent_parameters, agent_type as string, prev_agent)
-                                        return of(agent)
-                                    } else {
-                                        prev_agent.update_agent_parameters(agent_parameters)
-                                        return of(prev_agent)
+
+                                    // check if agent already exists
+                                    let current_agent = input_agent
+                                    let next_agent = null
+                                    while (current_agent != null) {
+                                        if (current_agent.id == agent_id) {
+                                            // reorder that current agent is on first position
+                                            const tmp = current_agent.prev_agent
+                                            if (input_agent != current_agent) {
+                                                current_agent.prev_agent = input_agent
+                                            }
+                                            if (next_agent != null) {
+                                                next_agent.prev_agent = tmp
+                                            }
+
+                                            current_agent.update_agent_parameters(agent_parameters)
+                                            return of(current_agent)
+                                        }
+
+                                        next_agent = current_agent
+                                        current_agent = current_agent.prev_agent
                                     }
+
+                                    // else create a new one
+                                    const new_agent = new Agent(agent_id as string, agent_parameters, agent_type as string, input_agent)
+                                    return of(new_agent)
                                 },
                                 (values) => values,
                                 [thisParameter, ...parameters]
