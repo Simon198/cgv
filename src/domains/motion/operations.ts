@@ -17,7 +17,10 @@ export const operations: Operations = {
                     if (inputs.length != 3) {
                         throw new Error('"move" has to receive exactly two parameters')
                     }
-                    const agent = inputs[0]
+                    let agent: Agent = inputs[0]
+                    if (Array.isArray(agent)) {
+                        agent = agent[agent.length - 1]
+                    }
                     const moveInput = new MoveInput({
                         direction: inputs[1],
                         speed: inputs[2]

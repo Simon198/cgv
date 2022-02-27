@@ -87,7 +87,7 @@ function iterate<T>(input: Observable<Matrix<Readonly<{
         [x: string]: Observable<any> | undefined;
     }>;
     }>>>, grammar: ParsedGrammarDefinition, operations: Operations,
-    index=0, result: Observable<any>[]=[], ruleOperatorMap = new Map<string,
+    index=0, ruleOperatorMap = new Map<string,
     { ref: OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> | undefined }>()
 ): Observable<Matrix<Readonly<{
     value: T;
@@ -100,22 +100,22 @@ function iterate<T>(input: Observable<Matrix<Readonly<{
     }>}>>> {
 
     if (index == grammar.length) {
-        return merge_observables(result)
+        return input
     }
 
-    const rule = grammar[index++]
+    const rule = grammar[index]
+    index += 1
     const symbol = rule.symbol
 
     if (ruleOperatorMap.has(symbol.identifier)) {
-        return iterate(input, grammar, operations, index+1, result, ruleOperatorMap)
+        return iterate(input, grammar, operations, index, ruleOperatorMap)
     }
 
     const interpretedStep = interpreteStep(symbol, grammar, operations, ruleOperatorMap)(input)
-    result.push(interpretedStep)
     return iterate(
         interpretedStep.pipe(),
         grammar, operations,
-        index+1, result, ruleOperatorMap
+        index, ruleOperatorMap
     )
 }
 
@@ -123,7 +123,7 @@ export function interprete<T>(
     grammar: ParsedGrammarDefinition,
     operations: Operations
 ): OperatorFunction<Matrix<InterpretionValue<T>>, Matrix<InterpretionValue<T>>> {
-    if (grammar.length === 0) {
+    if (grammar.length == 0) {
         return (input) => input
     }
     return (input) => iterate(input, grammar, operations)
@@ -203,12 +203,16 @@ export function interpreteStep<T>(
                     const get_agent: Operation<any> = (parameters) => (matrix) => {
                         return matrix.pipe(
                             operationInterpretion(
-                                (inputs) => {
-                                    const previous_agent: Agent = inputs[0]
+                                (inputs: (Agent | string | number)[]): any => {
+                                    let prev_agent: any = inputs[0] as Agent
+                                    if (!(prev_agent instanceof Agent)) {
+                                        prev_agent = null
+                                    }
+
                                     const agent_id = inputs[1]
 
                                     const agent_parameters = new AgentParameters([
-                                        inputs[2], inputs[3], inputs[4]
+                                        inputs[2] as number, inputs[3] as number, inputs[4] as number
                                     ])
                                     const agent_type = inputs[5]
 
@@ -216,13 +220,15 @@ export function interpreteStep<T>(
                                         throw new Error(`The id of the agent ${step.identifier} cannot be empty`)
                                     }
 
-                                    if (!previous_agent || previous_agent.id != agent_id) {
-                                        // TODO: probably add motions of previous agent to the new one
-                                        const agent = new Agent(agent_id, agent_parameters, agent_type)
+                                    if (
+                                        !prev_agent ||
+                                        prev_agent.id != agent_id
+                                    ) {
+                                        const agent = new Agent(agent_id as string, agent_parameters, agent_type as string, prev_agent)
                                         return of(agent)
                                     } else {
-                                        previous_agent.update_agent_parameters(agent_parameters)
-                                        return of(previous_agent)
+                                        prev_agent.update_agent_parameters(agent_parameters)
+                                        return of(prev_agent)
                                     }
                                 },
                                 (values) => values,

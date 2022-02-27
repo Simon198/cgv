@@ -52,10 +52,13 @@ export class Agent {
     public readonly id: string
     public agent_type: AgentType
 
-    constructor(id: string, agent_parameters: AgentParameters, agent_type: string) {
+    public prev_agent: Agent | null
+
+    constructor(id: string, agent_parameters: AgentParameters, agent_type: string, prev_agent: Agent | null) {
         this.id = id;
         this.initial_agent_parameters = agent_parameters
         this.last_agent_parameters = this.initial_agent_parameters
+        this.prev_agent = prev_agent
 
         if (Object.values<string>(AgentType).includes(agent_type)) {
             this.agent_type = agent_type as AgentType

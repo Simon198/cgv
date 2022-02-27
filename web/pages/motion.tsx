@@ -28,12 +28,19 @@ export default function Index() {
                 }),
                 interprete(grammar, operations),
             ).subscribe({
-                next: (results) => {
+                next: (results: any) => {
                     if (Array.isArray(results)) {
-                        console.log('Results', results.map(result => result.value))
-                        setState([results.map(result => result.value), undefined])
+                        while (Array.isArray(results)) {
+                            results = results[0]
+                        }
+                        const agents = []
+                        let current_agent: Agent | null = results.value
+                        while (current_agent != null) {
+                            agents.push(current_agent)
+                            current_agent = current_agent.prev_agent
+                        }
+                        setState([agents, undefined])
                     } else {
-                        console.log('NO RESULTS')
                         setState([[], undefined])
                     }
                 },
