@@ -106,8 +106,8 @@ export class Agent {
         const real_position = next_positions[next_positions.length - 1]
         if ( Math.sqrt((real_position.x - current_parameters.x)**2 + (real_position.y - current_parameters.y)**2) > 0.1 ) {
             throw new Error(
-                `The positions of agent ${this.id} at timestamp ${current_parameters.timestamp} should be ${[real_position.x, real_position.y]},` + 
-                `instead of ${[current_parameters.x, current_parameters.y]}`
+                `The positions of agent ${this.id} at timestamp ${current_parameters.timestamp} should be (${[real_position.x, real_position.y]}),` + 
+                `instead of (${[current_parameters.x, current_parameters.y]})`
             )
         }
 

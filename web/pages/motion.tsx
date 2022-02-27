@@ -12,11 +12,11 @@ export default function Index() {
     // const initial_agent = new Agent(0)
 
     const [text, setText] = useState("")
-    const [[agents, error], setState] = useState<[Agent[] | null, string | undefined]>([null, undefined])
+    const [[[positions, maximum_timestamp], error], setState] = useState<[[null | (Array<Array<{x: number, y: number} | null>>), number], string | undefined]>([[null, -1], undefined])
     useEffect(() => {
         try {
             const grammar = parse(text)
-            setState([[], undefined])
+            setState([[[], -1], undefined])
             const subscription = of(() => {}).pipe(
                 map((value) => {
                     return {
@@ -33,24 +33,37 @@ export default function Index() {
                         while (Array.isArray(results)) {
                             results = results[0]
                         }
+
+                        // parse results
                         const agents = []
                         let current_agent: Agent | null = results.value
                         while (current_agent != null) {
-                            agents.push(current_agent)
+                            if (current_agent instanceof Agent) {
+                                agents.push(current_agent)
+                            }
                             current_agent = current_agent.prev_agent
                         }
-                        setState([agents, undefined])
+
+                        // get maximal timestamp of all agents
+                        // idea: start_timestamp = 0 to maximal timestamp
+                        try {
+                            const maximum_timestamp = 2 + Math.max(...agents.map((agent) => agent.get_last_timestamp()))
+                            const positions = agents.map(agent => agent.complete_positions(maximum_timestamp))
+                            setState([[positions, maximum_timestamp], undefined])
+                        } catch (error) {
+                            setState([[null, -1], (error as Error).message])
+                        }
                     } else {
-                        setState([[], undefined])
+                        setState([[[], -1], undefined])
                     }
                 },
                 error: (error) => {
-                    setState([null, error.message])
+                    setState([[null, -1], (error as Error).message])
                 },
             })
             return () => subscription.unsubscribe()
         } catch (error: any) {
-            setState([null, error.message])
+            setState([[null, -1], (error as Error).message])
         }
     }, [text])
 
@@ -65,7 +78,7 @@ export default function Index() {
             </Head>
             <div className="d-flex responsive-flex-direction" style={{ width: "100vw", height: "100vh" }}>
                 <div style={{ whiteSpace: "pre-line" }} className="p-3 flex-basis-0 flex-grow-1 bg-white h3 mb-0">
-                    <AgentVisualizer agents={agents} />
+                    <AgentVisualizer positions={positions} maximum_timestamp={maximum_timestamp} />
                 </div>
                 <div className="d-flex flex-column flex-basis-0 flex-grow-1">
                     <textarea
@@ -79,7 +92,7 @@ export default function Index() {
                         className="overflow-auto p-3 flex-basis-0 h3 mb-0 bg-black flex-grow-1"
                         style={{ whiteSpace: "pre-line", maxHeight: 300 }}>
                         {error == null ? (
-                            agents == null ? (
+                            positions == null ? (
                                 <span className="text-primary">loading ...</span>
                             ) : (
                                 <span className="text-success">ok</span>

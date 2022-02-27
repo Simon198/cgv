@@ -4,7 +4,7 @@ import { RefObject, Suspense, useEffect, useRef, useState } from "react"
 import { Vector3, BufferGeometry, WebGLRenderer, Scene, LineBasicMaterial, Line, PerspectiveCamera, TextureLoader, Mesh, PlaneBufferGeometry, MeshBasicMaterial } from "three"
 import img from '../public/pedestrian.png'
 
-export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
+export function AgentVisualizer({ positions, maximum_timestamp }: { positions: null | (Array<Array<{x: number, y: number} | null>>), maximum_timestamp: number }) {
     let camera_z_position = 10;
     const canvasRef: RefObject<HTMLCanvasElement> | null = useRef<HTMLCanvasElement>(null)
     const camera = new PerspectiveCamera()
@@ -33,13 +33,16 @@ export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
 
         let timeout: NodeJS.Timeout | null = null
         let frame_number = 0
-        function next_frame(maximum_timestamp: number) {
+        function next_frame() {
             timeout = setTimeout(() => {
                 if (frame_number == 0) {
                     scene = new Scene()
                 }
                 console.log('Frame', frame_number + 1, maximum_timestamp - 1)
-                for (const agent_positions of positions) {
+                for (const agent_positions of positions as ({
+                    x: number;
+                    y: number;
+                } | null)[][]) {
     
                     let points: Vector3[] = []
                     for (const position of agent_positions.slice(0, frame_number+2))  {
@@ -55,27 +58,14 @@ export function AgentVisualizer({ agents }: { agents: Agent[] | null }) {
                 }
                 frame_number += 1
                 if (frame_number < maximum_timestamp - 1) {
-                    next_frame(maximum_timestamp)
+                    next_frame()
                 }
             }, 2000)
         }
 
-        if (agents != null) {
-            const real_agents = agents.filter(agent => agent instanceof Agent)
-            // get maximal timestamp of all agents
-            // idea: start_timestamp = 0 to maximal timestamp
-            const maximum_timestamp = 2 + Math.max(...real_agents.map((agent) => agent.get_last_timestamp()))
-            var positions: Array<any> = []
-            try {
-                positions = real_agents.map(agent => agent.complete_positions(maximum_timestamp))
-            } catch (error) {
-                console.error(error)
-            }
-            
-            if (maximum_timestamp > -1) {
-                render()
-                next_frame(maximum_timestamp)
-            }
+        render()
+        if (positions != null && maximum_timestamp > -1) {
+            next_frame()
         }
 
         return () => {
