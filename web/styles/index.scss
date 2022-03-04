@@ -25,3 +25,23 @@ a {
         flex-direction: row;
     }
 }
+
+.rules {
+    margin-bottom: 10px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-style: solid;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    &:active {
+        background-color: rgba(255, 255, 255, 0.6);
+    }
+}
+
+.highlight {
+    background-color: rgba(100, 255, 100, 0.8);
+}

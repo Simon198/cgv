@@ -8,49 +8,108 @@ import { AgentVisualizer } from "../src/agent-visualizer"
 export default function Index() {
     // const initial_agent = new Agent(0)
 
-    let [compile, setCompile] = useState(false)
+    const address = 'http://localhost:8000/'
+
+    // let [compile, setCompile] = useState(false)
+    // const [nextStep, setNextStep] = useState(false)
     const [text, setText] = useState("")
-    const [rule_index, setIndex] = useState(-1)
-    const [[rules, error], setState] = useState<[Array<object>, string | undefined]>([[], undefined])
-    useEffect(() => {
-        if (!compile) {
-            return
-        }
-        try {
-            setCompile(false)
-            console.log('compile', compile)
-            fetch(`http://localhost:8000/compile?input=${text}`, {
-                method:"GET",
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
-                    'Access-Control-Allow-Headers': 'X-Requested-With,content-type',
-                    'Access-Control-Allow-Credentials': 'true'
-                }
+    const [image, setImage] = useState("")
+    const [rule_index, setIndex] = useState({previous: -1, current: -1})
+    const [[rules, error], setState] = useState<[JSX.Element[], string | undefined]>([[], undefined])
+
+    function nextStep() {
+        setIndex({
+            previous: rule_index.current,
+            current: rule_index.current + 1
+        })
+    }
+
+    function onClick(index: number) {
+        return () => {
+            setIndex({
+                previous: rule_index.current,
+                current: index
             })
-                .then(resp => {
-                    if(!resp.ok){
-                        throw new Error('' + resp.status);
-                    } else {
-                        resp.json().then(result => {
-                            if (result.length > 0) {
-                                console.log('RESULT', result)
-                                const rules = result.map(rule => <div key={rule}>rule</div>)
-                                console.log('RULES', rules)
-                                setState(result)
-                            }
-                        })
-                    }
-                })
-                .catch(error => console.error(error))
-                // .then(response => response.json())
-                // .then(data => setState({ totalReactPackages: data.total }));
+        }
+    }
+
+    function createRules(rule_strings: string[]) {
+        const rules = rule_strings.map((rule, index) =>
+        <div className={"rules" + ((index == rule_index.current) ? ' highlight':'')} key={rule} onClick={onClick(index)}>{rule}</div>)
+        setState([rules, undefined])
+    }
+
+    function updateRules() {
+        const new_rules = rules.map((rule, index) => {
+            const key = rule.key
+            const className = "rules" + ((index == rule_index.current) ? ' highlight':'')
+            return <div className={className} key={key} onClick={onClick(index)}>{key}</div>
+        })
+        setState([new_rules, undefined])
+    }
+
+    async function fetchCompile() {
+        const resp = await fetch(`${address}compile?input=${encodeURIComponent(text)}`)
+        if(!resp.ok){
+            throw new Error('' + resp.status);
+        } else {
+            const response = await resp.json()
+            if (response.length && response.length > 0) {
+                createRules(response as string[])
+            } else {
+                setState([[], undefined])
+            }
+            setIndex({
+                current: rule_index.current,
+                previous: -1
+            })
+        }
+    }
+
+    async function fetchImage(index: number) {
+        const fetchedResource = await fetch(`${address}get_image?rule_index=${encodeURIComponent(index)}`);
+        const reader = await (fetchedResource.body as any).getReader();
+
+        let chunks: any = [];
+        reader.read().then(
+            function processText({ done, value }: any): any {
+            if (done) {
+                const blob = new Blob([chunks], { type: "image/png" });
+                setImage(URL.createObjectURL(blob));
+                return
+            }
+
+            // console.log(`Received ${chunks.length} chars so far!`)
+            const tempArray = new Uint8Array(chunks.length + value.length);
+            tempArray.set(chunks);
+            tempArray.set(value, chunks.length);
+            chunks = tempArray
+
+            return reader.read().then(processText)
+        })
+    }
+
+    useEffect(() => {
+        try {
+            if (rule_index.previous != rule_index.current) {
+                if (rule_index.current >= rules.length) {
+                    rule_index.current = -1
+                    rule_index.previous = -1
+                    updateRules()
+                    setImage('')
+                } else {
+                    rule_index.previous = rule_index.current
+                    updateRules()
+                    fetchImage(rule_index.current)
+                }
+            } else {
+                // console.log('NOTHING')
+            }
         } catch (error: any) {
             const message  = (error as Error).message
-            setState([[], message])
             alert(message)
         }
-    }, [compile, text, rule_index, rules])
+    }, [image, rule_index])
 
     // TODO: add option to change datasets
 
@@ -63,7 +122,8 @@ export default function Index() {
             </Head>
             <div className="d-flex responsive-flex-direction" style={{ width: "100vw", height: "100vh" }}>
                 <div style={{ whiteSpace: "pre-line" }} className="p-3 flex-basis-0 flex-grow-1 bg-white h3 mb-0">
-                    {text}
+                    {/* {text} */}
+                    <img src={image} style={{width: '100%'}}></img>
                 </div>
                 <div className="d-flex flex-column flex-basis-0 flex-grow-1">
                     <textarea
@@ -73,8 +133,11 @@ export default function Index() {
                         onChange={(e) => setText(e.target.value)}
                         className="overflow-auto p-3 flex-basis-0 h3 mb-0 text-light border-0 bg-dark flex-grow-1"
                     />
-                    <button onClick={(e) => setCompile(true)}>Compile</button>
                     <div>
+                        <button onClick={fetchCompile}>Compile</button>
+                        <button onClick={nextStep}>Next step</button>
+                    </div>
+                    <div className="overflow-auto p-3 flex-basis-0 h3 mb-0 text-light border-0 bg-dark flex-grow-1">
                         {rules}
                     </div>
 
