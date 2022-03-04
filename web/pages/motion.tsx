@@ -49,10 +49,12 @@ export default function Index() {
     }
 
     async function fetchCompile() {
-        const resp = await fetch(`${address}compile?input=${encodeURIComponent(text)}`)
-        if(!resp.ok){
-            throw new Error('' + resp.status);
-        } else {
+        try {
+            const resp = await fetch(`${address}compile?input=${encodeURIComponent(text)}`)
+            if(!resp.ok){
+                const response = await resp.text()
+                throw new Error(response);
+            }
             const response = await resp.json()
             if (response.length && response.length > 0) {
                 createRules(response as string[])
@@ -63,51 +65,63 @@ export default function Index() {
                 current: rule_index.current,
                 previous: -1
             })
+        } catch (error: any) {
+            const message  = (error as Error).message
+            alert(message)
+            setState([[], undefined])
+            setImage('')
         }
     }
 
     async function fetchImage(index: number) {
-        const fetchedResource = await fetch(`${address}get_image?rule_index=${encodeURIComponent(index)}`);
-        const reader = await (fetchedResource.body as any).getReader();
-
-        let chunks: any = [];
-        reader.read().then(
-            function processText({ done, value }: any): any {
-            if (done) {
-                const blob = new Blob([chunks], { type: "image/png" });
-                setImage(URL.createObjectURL(blob));
-                return
+        try{
+            const resp = await fetch(`${address}get_image?rule_index=${encodeURIComponent(index)}`);
+            if(!resp.ok){
+                const response = await resp.text()
+                throw new Error(response);
             }
+            const reader = await (resp.body as any).getReader();
 
-            // console.log(`Received ${chunks.length} chars so far!`)
-            const tempArray = new Uint8Array(chunks.length + value.length);
-            tempArray.set(chunks);
-            tempArray.set(value, chunks.length);
-            chunks = tempArray
-
-            return reader.read().then(processText)
-        })
-    }
-
-    useEffect(() => {
-        try {
-            if (rule_index.previous != rule_index.current) {
-                if (rule_index.current >= rules.length) {
-                    rule_index.current = -1
-                    rule_index.previous = -1
-                    updateRules()
-                    setImage('')
-                } else {
-                    rule_index.previous = rule_index.current
-                    updateRules()
-                    fetchImage(rule_index.current)
+            let chunks: any = [];
+            reader.read().then(
+                function processText({ done, value }: any): any {
+                if (done) {
+                    const blob = new Blob([chunks], { type: "image/png" });
+                    setImage(URL.createObjectURL(blob));
+                    return
                 }
-            } else {
-                // console.log('NOTHING')
-            }
+
+                // console.log(`Received ${chunks.length} chars so far!`)
+                const tempArray = new Uint8Array(chunks.length + value.length);
+                tempArray.set(chunks);
+                tempArray.set(value, chunks.length);
+                chunks = tempArray
+
+                return reader.read().then(processText)
+            })
         } catch (error: any) {
             const message  = (error as Error).message
             alert(message)
+            setState([[], undefined])
+            setImage('')
+        }
+    }
+
+    useEffect(() => {
+        if (rule_index.previous != rule_index.current) {
+            // TODO: check if text has changed since last time
+            if (rule_index.current >= rules.length) {
+                rule_index.current = -1
+                rule_index.previous = -1
+                updateRules()
+                setImage('')
+            } else {
+                rule_index.previous = rule_index.current
+                updateRules()
+                fetchImage(rule_index.current)
+            }
+        } else {
+            // console.log('NOTHING')
         }
     }, [image, rule_index])
 
