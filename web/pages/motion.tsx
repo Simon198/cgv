@@ -1,9 +1,8 @@
 import Head from "next/head"
 import React, { useEffect, useState } from "react"
-import { interval, map, NEVER, of, startWith } from "rxjs"
-import { useMapbox } from "../src/use-mapbox"
-import { useInterpretion } from "../src/use-interpretion"
-import { AgentVisualizer } from "../src/agent-visualizer"
+import Select from 'react-select'
+import 'rc-slider/assets/index.css';
+import TooltipSlider from "../src/tool-tip-slider"
 
 export default function Index() {
     // const initial_agent = new Agent(0)
@@ -15,6 +14,12 @@ export default function Index() {
     const [text, setText] = useState("")
     const [image, setImage] = useState("")
     const [rule_index, setIndex] = useState({previous: -1, current: -1})
+    const [dataset_options, setDatasetOptions] = useState([] as object[])
+    const [dataset_option, setDatasetOption] = useState(null)
+    const [range, setRange] = useState([0, 50])
+    const [frame_range, setFrameRange] = useState([0, 20])
+
+
     const [[rules, error], setState] = useState<[JSX.Element[], string | undefined]>([[], undefined])
 
     function nextStep() {
@@ -48,6 +53,11 @@ export default function Index() {
         setState([new_rules, undefined])
     }
 
+    function selectOption(option) {
+        setDatasetOption(option)
+        setRange([option.value.start_frame, option.value.end_frame])
+    }
+
     async function fetchCompile() {
         try {
             const resp = await fetch(`${address}compile?input=${encodeURIComponent(text)}`)
@@ -74,8 +84,20 @@ export default function Index() {
     }
 
     async function fetchImage(index: number) {
+        if (dataset_option == null) {
+            return
+        }
         try{
-            const resp = await fetch(`${address}get_image?rule_index=${encodeURIComponent(index)}`);
+            const option = dataset_option.value
+            const resp = await fetch(`${address}get_image`, {
+                method: 'post',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    'name': option.dataset_name,
+                    'rule_index': index,
+                    'kwargs': option.kwargs
+                })
+            });
             if(!resp.ok){
                 const response = await resp.text()
                 throw new Error(response);
@@ -91,7 +113,6 @@ export default function Index() {
                     return
                 }
 
-                // console.log(`Received ${chunks.length} chars so far!`)
                 const tempArray = new Uint8Array(chunks.length + value.length);
                 tempArray.set(chunks);
                 tempArray.set(value, chunks.length);
@@ -107,7 +128,68 @@ export default function Index() {
         }
     }
 
+    async function fetchDatasetOptions() {
+        try {
+            const resp = await fetch(`${address}dataset_options`)
+            if(!resp.ok){
+                const response = await resp.text()
+                throw new Error(response);
+            }
+            const response = await resp.json()
+            if (response.length && response.length > 0) {
+                const select_options = response.map((option: any) => { return {
+                    label: option.display_name,
+                    value: option
+                }})
+                setDatasetOptions(select_options)
+            } else {
+                setDatasetOptions([])
+            }
+        } catch (error: any) {
+            const message  = (error as Error).message
+            alert(message)
+            setDatasetOptions([])
+        }
+    }
+
+    async function fetchRules() {
+        if (dataset_option == null) {
+            return
+        }
+        const option: any = dataset_option.value
+        try {
+            const resp = await fetch(`${address}get_rules`, {
+                method: 'post',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    'name': option.dataset_name,
+                    'start_frame': frame_range[0],
+                    'end_frame': frame_range[1],
+                    'kwargs': option.kwargs
+                })
+            })
+            if(!resp.ok){
+                const response = await resp.text()
+                throw new Error(response);
+            }
+            const response = await resp.json()
+            if (response.length && response.length > 0) {
+                setText(response)
+            } else {
+                setText('')
+            }
+        } catch (error: any) {
+            const message  = (error as Error).message
+            alert(message)
+            setText('')
+        }
+    }
+
     useEffect(() => {
+        if (dataset_options.length == 0) {
+            fetchDatasetOptions()
+        }
+        
         if (rule_index.previous != rule_index.current) {
             // TODO: check if text has changed since last time
             if (rule_index.current >= rules.length) {
@@ -123,7 +205,7 @@ export default function Index() {
         } else {
             // console.log('NOTHING')
         }
-    }, [image, rule_index])
+    }, [image, rule_index, frame_range])
 
     // TODO: add option to change datasets
 
@@ -136,12 +218,25 @@ export default function Index() {
             </Head>
             <div className="d-flex responsive-flex-direction" style={{ width: "100vw", height: "100vh" }}>
                 <div style={{ whiteSpace: "pre-line" }} className="p-3 flex-basis-0 flex-grow-1 bg-white h3 mb-0">
-                    {/* {text} */}
+                    <Select
+                        options={dataset_options}
+                        onChange={selectOption}
+                        value={dataset_option}
+                    ></Select>
+                    <TooltipSlider
+                        min={range[0]} max={range[1]}
+                        count={1}
+                        pushable={10}
+                        value={frame_range}
+                        onChange={setFrameRange}
+                        tipProps={{ overlayClassName: 'foo' }}
+                    ></TooltipSlider>
+                    <button onClick={fetchRules}>Load rules</button>
                     <img src={image} style={{width: '100%'}}></img>
                 </div>
                 <div className="d-flex flex-column flex-basis-0 flex-grow-1">
                     <textarea
-                        style={{ resize: "none", outline: 0 }}
+                        style={{ resize: "none", outline: 0, whiteSpace: 'pre-line' }}
                         value={text}
                         spellCheck={false}
                         onChange={(e) => setText(e.target.value)}
